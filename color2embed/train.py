@@ -72,8 +72,8 @@ def train(args):
     dataloader = create_sampler_and_dataloader(dataset, config.TRAIN_BATCH_SIZE_PER_GPU)
 
     model = Color2Embed(color_embedding_dim=config.COLOR_EMBEDDING_DIM)
-    loss = Color2EmbedLoss()
-
+    loss = Color2EmbedLoss(rank)
+    loss.to(rank)
     model.to(rank)
 
     ddp_model = DistributedDataParallel(model, broadcast_buffers=False, device_ids=[rank])
@@ -101,36 +101,40 @@ def train(args):
 
             l_channel, ground_truth_ab, ground_truth_rgb, color_source = item
 
-            print(l_channel.shape, ground_truth_ab.shape, ground_truth_rgb.shape, color_source.shape)
+            # print(l_channel.shape, ground_truth_ab.shape, ground_truth_rgb.shape, color_source.shape)
 
-            with torch.cuda.amp.autocast():
-                pab = ddp_model(l_channel.to(rank), color_source.to(rank))
+            #with torch.cuda.amp.autocast():
+            pab = ddp_model(l_channel.to(rank), color_source.to(rank))
 
-            merged_lab = torch.cat((l_channel, pab), 1)
-            merged_lab_numpy = merged_lab.detach().cpu().numpy()
-            prgb_numpy = cv2.cvtColor(np.transpose(merged_lab_numpy, (1, 2, 0)), cv2.COLOR_Lab2BGR)
-            prgb = dataset.transform_torch(prgb_numpy).to(rank)
-            loss_value = loss(pab, ground_truth_ab, prgb, ground_truth_rgb)
+            merged_lab = torch.cat((l_channel.to(rank), pab), 1)
+            prgb = merged_lab.detach().cpu().numpy()
+            prgb = np.transpose(prgb, (0, 2, 3, 1))
+            for i in range(prgb.shape[0]):
+                prgb[i] = cv2.cvtColor(prgb[i], cv2.COLOR_Lab2BGR)
 
-            scaler.scale(loss_value).backward()
+                merged_lab[i] = dataset.transform_torch(image=prgb[i])['image'].to(rank)
+            # merged_lab = torch.from_numpy(prgb).to(rank)
+            loss_value = loss(pab, ground_truth_ab.to(rank), merged_lab.to(rank), ground_truth_rgb.to(rank))
+            loss_value.backward()
+            # scaler.scale(loss_value).backward()
 
-            scaler.step(optimizer)
-            scaler.update()
-
+            # scaler.step(optimizer)
+            # scaler.update()
+            optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
             loss_v = loss_value.detach().cpu()
             tq.set_postfix_str(f'loss: {loss_v:.3f}')
 
             if draw_images and verbose:
-                grid = torchvision.utils.make_grid(prgb[:, [2, 1, 0]], normalize=True, scale_each=True)
+                grid = torchvision.utils.make_grid(merged_lab[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_prgb", grid, global_step=epoch)
                 grid = torchvision.utils.make_grid(ground_truth_rgb[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_ground_truth_rgb", grid, global_step=epoch)
                 grid = torchvision.utils.make_grid(color_source[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_color_source", grid, global_step=epoch)
-                grid = torchvision.utils.make_grid(l_channel[:, [2, 1, 0]], normalize=True, scale_each=True)
-                writer.add_image("images_l_channel", grid, global_step=epoch)
+                # grid = torchvision.utils.make_grid(l_channel[:, [2, 1, 0]], normalize=True, scale_each=True)
+                # writer.add_image("images_l_channel", grid, global_step=epoch)
                 draw_images = False
 
             if global_step % 50 == 0 and verbose:

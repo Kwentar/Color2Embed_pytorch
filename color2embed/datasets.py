@@ -48,8 +48,8 @@ class Color2EmbedDataset(Dataset):
         return len(self.lines)
 
     def process_image(self, image_path):
-        lenna = cv2.imread(image_path)
-        ground_truth_rgb = cv2.resize(lenna, (self.image_size, self.image_size), interpolation=cv2.INTER_LINEAR)
+        image = cv2.imread(image_path)
+        ground_truth_rgb = cv2.resize(image, (self.image_size, self.image_size), interpolation=cv2.INTER_LINEAR)
         lab = cv2.cvtColor(ground_truth_rgb, cv2.COLOR_BGR2LAB)
         tsp = warp_image_cv(ground_truth_rgb)
 
