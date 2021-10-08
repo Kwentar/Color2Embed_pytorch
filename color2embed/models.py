@@ -176,9 +176,9 @@ class ModulatedConv2d(nn.Module):
 
 
 class Color2Embed(nn.Module):
-    def __init__(self, style_dim):
+    def __init__(self, color_embedding_dim):
         super(Color2Embed, self).__init__()
-        self.color_encoder = torch_models.resnet18(num_classes=style_dim)
+        self.color_encoder = torch_models.resnet18(num_classes=color_embedding_dim)
         self.content_encoder_plus_PFFN = UNet(1, 2)
 
     def forward(self, grayscale_image, color_image):
