@@ -121,7 +121,7 @@ def tps_grid_to_remap(grid, src_shape):
     return mx, my
 
 
-def get_noise(delta=0.15):
+def get_noise(delta=0.25):
     return delta - np.random.rand() * delta * 2
 
 

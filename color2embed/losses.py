@@ -16,10 +16,6 @@ class PerceptualLoss(nn.Module):
 
         self.register_buffer("mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer("std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
-        # self.mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(rank)
-        # self.std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(rank)
-
-        self.transform = F.interpolate
 
     def forward(self, input_, target):
         input_ = (input_ - self.mean) / self.std
@@ -43,7 +39,7 @@ class Color2EmbedLoss(nn.Module):
     def forward(self, pab, gtab, prgb, gtrgb):
         l_rec = self.reconstruction_loss(pab, gtab)
         l_per = self.perceptual_loss(prgb, gtrgb)
-        return self.lambda_reconstruction * l_rec + self.lambda_perceptual * l_per
+        return self.lambda_reconstruction * l_rec + self.lambda_perceptual * l_per, l_per, l_rec
 
 
 if __name__ == '__main__':

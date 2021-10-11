@@ -22,6 +22,13 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+    @staticmethod
+    def init_weights(m):
+        if isinstance(m, nn.Conv2d):
+            torch.nn.init.xavier_uniform(m.weight)
+            m.bias.data.fill_(0.01)
+
+
     def forward(self, x):
         return self.double_conv(x)
 
@@ -73,6 +80,7 @@ class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        torch.nn.init.xavier_uniform(self.conv.weight)
 
     def forward(self, x):
         return self.conv(x)
@@ -100,6 +108,7 @@ class UNet(nn.Module):
         self.G3 = Up(128, 64, bilinear)
         self.F3 = ModulatedConv2d(64, 64, 3, style_dim)
         self.outc = OutConv(64, n_classes)
+
 
     def forward(self, x, color_embed):
         x1 = self.inc(x)

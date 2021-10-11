@@ -21,6 +21,7 @@ import config
 from datasets import Color2EmbedDataset
 from losses import Color2EmbedLoss
 from models import Color2Embed
+from utils import AverageMeter
 
 
 def print_verbose(text, verbose=False):
@@ -58,6 +59,10 @@ def train(args):
     if verbose:
         os.makedirs(log_dir)
         writer = SummaryWriter(log_dir=log_dir)
+        latest_dir = "logs/latest"
+        if os.path.exists(latest_dir):
+            os.unlink(latest_dir)
+        os.symlink(os.path.join(os.getcwd(), log_dir), latest_dir, target_is_directory=True)
 
     torch.cuda.set_device(rank)
 
@@ -89,6 +94,8 @@ def train(args):
     print_verbose(f'Train started at {train_start_time}', verbose)
     global_step = 0
 
+    avg_loss = AverageMeter()
+    # images_step = 0
     for epoch in range(config.TRAIN_EPOCHS):
         draw_images = True
         print_verbose(f'Start epoch {epoch + 1}', verbose)
@@ -110,11 +117,11 @@ def train(args):
             prgb = merged_lab.detach().cpu().numpy()
             prgb = np.transpose(prgb, (0, 2, 3, 1))
             for i in range(prgb.shape[0]):
-                prgb[i] = cv2.cvtColor(prgb[i], cv2.COLOR_Lab2BGR)
+                prgb[i] = cv2.cvtColor(np.clip(prgb[i]*255, 0, 255).astype(np.uint8), cv2.COLOR_Lab2BGR)
 
-                merged_lab[i] = dataset.transform_torch(image=prgb[i])['image'].to(rank)
+                merged_lab[i] = dataset.transform_torch(image=prgb[i])['image'].to(rank)/255.
             # merged_lab = torch.from_numpy(prgb).to(rank)
-            loss_value = loss(pab, ground_truth_ab.to(rank), merged_lab.to(rank), ground_truth_rgb.to(rank))
+            loss_value, l_per, l_rec = loss(pab, ground_truth_ab.to(rank), merged_lab.to(rank), ground_truth_rgb.to(rank))
             loss_value.backward()
             # scaler.scale(loss_value).backward()
 
@@ -124,24 +131,38 @@ def train(args):
             optimizer.zero_grad()
             scheduler.step()
             loss_v = loss_value.detach().cpu()
+            avg_loss.update(loss_v)
             tq.set_postfix_str(f'loss: {loss_v:.3f}')
+            if verbose:
+                writer.add_scalar('train/loss_step', loss_v, global_step)
+                writer.add_scalar('pab/pab_min', pab.detach().cpu().min(), global_step)
+                writer.add_scalar('pab/pab_max', pab.detach().cpu().max(), global_step)
+                writer.add_scalar('train/l_per', l_per.detach().cpu().max(), global_step)
+                writer.add_scalar('train/l_rec', l_rec.detach().cpu().max(), global_step)
 
-            if draw_images and verbose:
+            if global_step % 2000 == 1 and verbose:
+                cv2.imwrite('test.png', prgb[0])
+                pa_channel = pab[:, 0, :, :].unsqueeze(1)
+                pb_channel = pab[:, 1, :, :].unsqueeze(1)
                 grid = torchvision.utils.make_grid(merged_lab[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_prgb", grid, global_step=epoch)
                 grid = torchvision.utils.make_grid(ground_truth_rgb[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_ground_truth_rgb", grid, global_step=epoch)
                 grid = torchvision.utils.make_grid(color_source[:, [2, 1, 0]], normalize=True, scale_each=True)
                 writer.add_image("images_color_source", grid, global_step=epoch)
-                # grid = torchvision.utils.make_grid(l_channel[:, [2, 1, 0]], normalize=True, scale_each=True)
-                # writer.add_image("images_l_channel", grid, global_step=epoch)
+                grid = torchvision.utils.make_grid(l_channel.expand(-1, 3, -1, -1)[:, [2, 1, 0]], normalize=True, scale_each=True)
+                writer.add_image("images_l_channel", grid, global_step=epoch)
+                grid = torchvision.utils.make_grid(pa_channel.expand(-1, 3, -1, -1)[:, [2, 1, 0]], normalize=True, scale_each=True)
+                writer.add_image("images_a_channel", grid, global_step=epoch)
+                grid = torchvision.utils.make_grid(pb_channel.expand(-1, 3, -1, -1)[:, [2, 1, 0]], normalize=True, scale_each=True)
+                writer.add_image("images_b_channel", grid, global_step=epoch)
                 draw_images = False
 
             if global_step % 50 == 0 and verbose:
-                writer.add_scalar('train/loss', loss_v, global_step)
+                writer.add_scalar('train/loss', avg_loss.avg, global_step)
                 writer.add_scalar('train/lr', get_lr(optimizer), global_step)
                 writer.add_scalar('train/epoch', epoch, global_step)
-
+                avg_loss.reset()
                 writer.flush()
 
         if verbose:
