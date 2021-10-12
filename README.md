@@ -12,7 +12,9 @@ In this paper, we present a fast exemplar-based image colorization approach usin
 1. Download ImageNet part from [kaggle](https://www.kaggle.com/c/imagenet-object-localization-challenge/data)
 2. Unpack it and made train list: each line of simple text file should be path to file, e.g. `n09428293/n09428293_23938.JPEG` or full path, set up path to this text file in `config.IMAGENET_LIST`. If you have full path in list, set `config.IMAGENET_PREFIX = ''` or to prefix if you extract it, btw `os.path.join(config.IMAGENET_PREFIX, <image_list_item>` should be valid path to image
 3. Change config batch size for your GPU (I have V100 and batch 32, it is around 20 GB GPU memory)
-4. Run training with DDP from color `color2embed` folder `python -m torch.distributed.launch --nproc_per_node=8 train.py`, where 8 - number of videocards
+4. Run training with DDP from `color2embed` folder `python -m torch.distributed.launch --nproc_per_node=8 train.py`, where 8 - number of videocards
+
+Code samples some train parts are in `color2embed/test_parts.ipynb`
 
 My train log:
 ![Train log](/readme_images/train_log.PNG)
@@ -51,7 +53,7 @@ Bad samples:
 # Inference
 Download weights from https://drive.google.com/file/d/1xmn-8FvKqm6MoSVYYQq9Rn-BdnOTdrwx/view?usp=sharing and put it in `trained_model` folder
 
-See inference.ipynb for details
+See `color2embed/inference.ipynb` for details
 
 # References:
 * Color2Embed: Fast Exemplar-Based Image Colorization using Color Embeddings: https://arxiv.org/abs/2106.08017
