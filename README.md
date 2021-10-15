@@ -1,3 +1,4 @@
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1Xyq-kuTWzvoQH4r7d5C7YN7sVe19pUv0)
 # Color2Embed_pytorch
 This is the 3d-part realisation of **Color2Embed: Fast Exemplar-Based Image Colorization using Color Embeddings** (https://arxiv.org/abs/2106.08017) on PyTorch
 
